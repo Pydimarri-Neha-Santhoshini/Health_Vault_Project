@@ -1,0 +1,271 @@
+import React from 'react';
+import Sidebar from '../components/Sidebar';
+import { useHealth } from '../contexts/HealthContext';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { TrendingUp, AlertTriangle, CheckCircle, Loader, RefreshCw, BarChart2 } from 'lucide-react';
+
+const Insights = () => {
+    const { insights, insightsLoading: loading, refreshAll, isSummaryUpdating } = useHealth();
+
+    const bloodData = insights?.chart_data || [];
+    const aiInsights = insights?.recommendations || [];
+    const globalSummary = insights?.global_summary || null;
+
+    const renderSummaryText = (text) => {
+        if (!text) return null;
+        return text.split('\n').map((line, i) => {
+            const strippedLine = line.replace(/\*\*/g, '');
+            if (strippedLine.startsWith('- ') || strippedLine.startsWith('* ')) {
+                const content = strippedLine.substring(2);
+                const colonIndex = content.indexOf(':');
+                if (colonIndex > -1 && colonIndex < 60) {
+                    const boldPart = content.substring(0, colonIndex + 1);
+                    const rest = content.substring(colonIndex + 1);
+                    return (
+                        <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.85rem', paddingLeft: '0.5rem' }}>
+                            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--color-primary)', marginTop: '0.45rem', flexShrink: 0 }}></div>
+                            <div style={{ margin: 0, lineHeight: '1.5' }}>
+                                <strong style={{ color: 'var(--color-text-main)' }}>{boldPart}</strong>{rest}
+                            </div>
+                        </div>
+                    );
+                }
+                return (
+                     <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.85rem', paddingLeft: '0.5rem' }}>
+                        <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--color-primary)', marginTop: '0.45rem', flexShrink: 0 }}></div>
+                        <div style={{ margin: 0, lineHeight: '1.5' }}>{content}</div>
+                    </div>
+                );
+            } else if (strippedLine.toLowerCase().includes('health recommendations:')) {
+                return <h4 key={i} style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--color-text-main)', marginTop: '1.5rem', marginBottom: '1rem' }}>{strippedLine}</h4>;
+            } else if (strippedLine.trim() === '') {
+                return null;
+            } else {
+                return <p key={i} style={{ marginBottom: '1rem', lineHeight: '1.6' }}>{strippedLine}</p>;
+            }
+        });
+    };
+
+    return (
+        <div className="app-layout">
+            <Sidebar />
+            <main className="main-content">
+                <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                        <h1>Health Insights</h1>
+                        <p className="text-muted">AI-powered analysis of your medical history.</p>
+                    </div>
+                    <button 
+                        onClick={refreshAll} 
+                        disabled={loading}
+                        className="btn btn-outline"
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                        Refresh Insights
+                    </button>
+                </header>
+
+                {/* Global AI Summary */}
+                {loading ? (
+                    <div className="skeleton" style={{ height: '140px', marginBottom: '2.5rem', borderRadius: '8px' }} />
+                ) : (isSummaryUpdating || (aiInsights.length > 0 && !(globalSummary && globalSummary.summary))) ? (
+                    <div style={{
+                        marginBottom: '2.5rem',
+                        border: '1px dashed var(--color-border)',
+                        borderLeft: '4px solid var(--color-primary)',
+                        background: 'var(--color-surface)',
+                        borderRadius: '8px',
+                        padding: '1.25rem 1.5rem',
+                        display: 'flex', alignItems: 'center', gap: '0.75rem',
+                        color: 'var(--color-text-muted)', fontSize: '0.9rem'
+                    }}>
+                        <Loader size={18} className="animate-spin" style={{ flexShrink: 0, color: 'var(--color-primary)' }} />
+                        <span>
+                            <strong style={{ color: 'var(--color-text-main)' }}>Global Health Summary</strong> — {isSummaryUpdating ? "Regenerating based on your latest records..." : "Being generated by AI from your records."} 
+                            Click <strong>Refresh Insights</strong> in a moment to load the latest analysis.
+                        </span>
+                    </div>
+                ) : globalSummary && globalSummary.summary ? (
+                    <div style={{ 
+                        marginBottom: '2.5rem', 
+                        border: '1px solid var(--color-border)', 
+                        borderLeft: '4px solid var(--color-primary)', 
+                        background: 'var(--color-surface)', 
+                        borderRadius: '8px', 
+                        padding: '1.5rem',
+                        boxShadow: 'var(--shadow-sm)'
+                    }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+                            <TrendingUp color="var(--color-primary)" size={20} />
+                            <h2 style={{ fontSize: '1.15rem', fontWeight: '600', color: 'var(--color-text-main)', margin: 0 }}>Global Health Summary</h2>
+                            <span className="text-muted" style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>Last updated: {globalSummary.updated_at}</span>
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--color-text-main)' }}>
+                            {renderSummaryText(globalSummary.summary)}
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* AI Recommendations (Per Report) */}
+                <h3 style={{ marginBottom: '1.5rem', fontSize: '1.15rem', fontWeight: '600' }}>Individual Report Insights</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '3.5rem' }}>
+                    {loading ? (
+                        <div style={{ padding: '2rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Loader className="animate-spin" /> Loading AI Insights...
+                        </div>
+                    ) : aiInsights.length === 0 ? (
+                        <div className="card" style={{ color: 'var(--color-text-muted)', gridColumn: '1 / -1' }}>
+                            No insights available yet. Please upload medical records to generate AI insights.
+                        </div>
+                    ) : aiInsights.map((insight, idx) => (
+                        <div key={idx} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1.25rem', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', background: 'var(--color-surface)', borderRadius: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                    <CheckCircle size={16} color="#10b981" />
+                                    <span style={{ fontWeight: '500', fontSize: '0.95rem', color: 'var(--color-primary)' }}>{insight.report_title || "Report Insight"}</span>
+                                </div>
+                                <span className="text-muted" style={{ fontSize: '0.7rem' }}>{insight.date}</span>
+                            </div>
+                            <p style={{ lineHeight: '1.5', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>{insight.text || insight}</p>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Charts Container */}
+                {loading ? null : bloodData.length === 0 ? (
+                    <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--color-text-muted)', padding: '5rem 2rem', background: 'var(--color-surface)', borderRadius: '12px' }}>
+                        <BarChart2 size={48} color="var(--color-border)" style={{ marginBottom: '1.25rem' }} />
+                        <p style={{ fontSize: '0.95rem' }}>Graphs will appear here once enough structured data is extracted from your uploads.</p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '2rem' }}>
+                        {bloodData.some(d => d.Weight !== undefined) && (
+                            <div className="card">
+                                <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>Weight Trend (kg)</h2>
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={bloodData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                                            <YAxis stroke="var(--color-text-muted)" domain={['dataMin - 5', 'dataMax + 5']} />
+                                            <Tooltip 
+                                                formatter={(value) => [`${value} kg`, 'Weight']}
+                                                wrapperStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+                                            />
+                                            <Line type="monotone" dataKey="Weight" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 6 }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+
+                        {bloodData.some(d => d.Height !== undefined) && (
+                            <div className="card">
+                                <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>Height Trend (ft)</h2>
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={bloodData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                                            <YAxis stroke="var(--color-text-muted)" domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+                                            <Tooltip 
+                                                formatter={(value) => [`${value} ft`, 'Height']}
+                                                wrapperStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+                                            />
+                                            <Line type="monotone" dataKey="Height" stroke="#ec4899" strokeWidth={3} dot={{ r: 6 }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+
+                        {bloodData.some(d => d.Hemoglobin !== undefined) && (
+                            <div className="card">
+                                <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>Hemoglobin Trend (g/dL)</h2>
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={bloodData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                                            <YAxis stroke="var(--color-text-muted)" />
+                                            <Tooltip wrapperStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                            <Line type="monotone" dataKey="Hemoglobin" stroke="var(--color-primary)" strokeWidth={3} dot={{ r: 6 }} activeDot={{ r: 8 }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+
+                        {bloodData.some(d => d.WBC !== undefined) && (
+                            <div className="card">
+                                <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>WBC Trend (10^9/L)</h2>
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={bloodData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                                            <YAxis stroke="var(--color-text-muted)" />
+                                            <Tooltip wrapperStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                            <Line type="monotone" dataKey="WBC" stroke="#10b981" strokeWidth={3} dot={{ r: 6 }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+
+                        {bloodData.some(d => d.RBC !== undefined) && (
+                            <div className="card">
+                                <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>RBC Trend (millions/mcL)</h2>
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={bloodData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                                            <YAxis stroke="var(--color-text-muted)" />
+                                            <Tooltip wrapperStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                            <Line type="monotone" dataKey="RBC" stroke="#ef4444" strokeWidth={3} dot={{ r: 6 }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+
+                        {bloodData.some(d => d.Platelets !== undefined) && (
+                            <div className="card">
+                                <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>Platelets Trend (10^3/uL)</h2>
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={bloodData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                                            <YAxis stroke="var(--color-text-muted)" />
+                                            <Tooltip wrapperStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                            <Line type="monotone" dataKey="Platelets" stroke="#f59e0b" strokeWidth={3} dot={{ r: 6 }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {!bloodData.some(d => 
+                            d.Hemoglobin !== undefined || 
+                            d.WBC !== undefined || 
+                            d.RBC !== undefined || 
+                            d.Platelets !== undefined ||
+                            d.Weight !== undefined ||
+                            d.Height !== undefined
+                        ) && (
+                            <div className="card" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '3rem', gridColumn: '1 / -1' }}>
+                                Found numerical data, but missing standard tracked metrics (Weight, Height, Hemoglobin, WBC, RBC, Platelets).
+                            </div>
+                        )}
+                    </div>
+                )}
+
+            </main>
+        </div>
+    );
+};
+
+export default Insights;

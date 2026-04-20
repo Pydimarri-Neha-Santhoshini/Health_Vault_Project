@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Link Error - Health Vault</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #fef2f2; color: #991b1b; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 2rem; text-align: center; }
+        .card { background: white; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); max-width: 400px; border: 1px solid #fee2e2; }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+        p { color: #4b5563; font-size: 0.95rem; line-height: 1.5; }
+        .icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="icon">⚠️</span>
+        <h1>Access Denied</h1>
+        <p>{{ error }}</p>
+        <p style="margin-top: 1.5rem; font-size: 0.8rem; color: #9ca3af;">Please ask the patient to generate a new emergency QR code if this was an error.</p>
+    </div>
+</body>
+</html>
