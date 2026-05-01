@@ -57,6 +57,8 @@ def create_app():
 
     return app
 
+# Expose the app object globally so Gunicorn can find it during deployment
+app = create_app()
+
 if __name__ == '__main__':
-    app = create_app()
     app.run(host='0.0.0.0', debug=True, port=int(os.getenv("PORT", 5000)))
