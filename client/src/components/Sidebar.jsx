@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Activity, Clock, BarChart2, User, LogOut, ShieldAlert, LayoutDashboard } from 'lucide-react';
+import { Activity, Clock, BarChart2, User, LogOut, ShieldAlert, LayoutDashboard, Loader } from 'lucide-react';
 
 const Sidebar = () => {
     const navigate = useNavigate();
@@ -17,6 +17,42 @@ const Sidebar = () => {
         { path: '/insights', icon: <BarChart2 size={20} />, label: 'Insights' },
         { path: '/profile', icon: <User size={20} />, label: 'Profile' },
     ];
+
+    const [isChecking, setIsChecking] = React.useState(false);
+
+    const handleEmergencyClick = async () => {
+        setIsChecking(true);
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData?.session?.access_token;
+            if (!token) {
+                alert("Access Denied: Please log in first.");
+                setIsChecking(false);
+                return;
+            }
+
+            const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+            const res = await fetch(`${apiUrl}/emergency/current-token`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.token && new Date(data.expires_at) > new Date()) {
+                    window.open(data.network_url || `/api/emergency/${data.token}`, '_blank');
+                } else {
+                    alert("Access Denied: No active emergency QR code found. Please navigate to Profile to generate one.");
+                }
+            } else {
+                alert("Access Denied: Could not verify emergency status. Ensure you have an active medical token.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error connecting to the server to verify emergency access.");
+        } finally {
+            setIsChecking(false);
+        }
+    };
 
     return (
         <div style={{
@@ -78,9 +114,18 @@ const Sidebar = () => {
                 <button
                     className="btn glowing-btn"
                     style={{ width: '100%', justifyContent: 'center', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}
-                    onClick={() => navigate('/emergency/generate')}
+                    onClick={handleEmergencyClick}
+                    disabled={isChecking}
                 >
-                    <ShieldAlert size={18} /> Emergency QR
+                    {isChecking ? (
+                        <>
+                            <Loader size={18} className="animate-spin" /> Checking...
+                        </>
+                    ) : (
+                        <>
+                            <ShieldAlert size={18} /> Emergency QR
+                        </>
+                    )}
                 </button>
                 <button
                     className="btn text-muted"

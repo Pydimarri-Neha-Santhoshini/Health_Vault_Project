@@ -31,7 +31,7 @@ const ConfidenceBadge = ({ score }) => {
 };
 
 const Dashboard = () => {
-    const { records, recordsLoading: loading, fetchRecords, deleteRecord, insights, insightsLoading } = useHealth();
+    const { records, recordsLoading: loading, fetchRecords, fetchInsights, deleteRecord, insights, insightsLoading, setIsSummaryUpdating } = useHealth();
     const [showUploadModal, setShowUploadModal] = useState(false);
 
     // Derive Vitals from insights
@@ -47,9 +47,22 @@ const Dashboard = () => {
         }
     };
 
-    const handleUploadComplete = () => {
+    const handleUploadSuccess = () => {
         setShowUploadModal(false);
         fetchRecords(true); // Force refresh data after upload
+        
+        // Notify the app that summary is generating in the background
+        setIsSummaryUpdating(true);
+        
+        // Refresh insights after 5 seconds to give the backend time to generate the global summary
+        setTimeout(() => {
+            fetchInsights(true);
+            setIsSummaryUpdating(false);
+        }, 5000);
+    };
+
+    const handleUploadClose = () => {
+        setShowUploadModal(false);
     };
 
     return (
@@ -175,7 +188,7 @@ const Dashboard = () => {
                 </main>
             </div>
             {/* Upload Modal */}
-            <UploadModal isOpen={showUploadModal} onClose={handleUploadComplete} />
+            <UploadModal isOpen={showUploadModal} onClose={handleUploadClose} onSuccess={handleUploadSuccess} />
         </>
     );
 };

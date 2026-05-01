@@ -31,124 +31,62 @@ class GeminiService:
         # Normalize: if we find 3 or more keywords, we give a full 1.0 score
         return min(matches / 3.0, 1.0)
 
-    def extract_and_validate(self, file_path_or_uri: str, mime_type: str = "application/pdf") -> Tuple[bool, float, str]:
+    def extract_validate_and_structure(self, file_path_or_uri: str, mime_type: str = "application/pdf") -> Tuple[bool, float, Dict[str, Any], float, str]:
         """
-        Step 1: Extract text and perform LLM validation.
-        Returns: (is_valid, validation_score, raw_text)
+        Step 1 & 2 Combined: Validate the document and directly extract structured JSON data.
+        Returns: (is_valid, validation_score, structured_dict, final_confidence_score, raw_text_or_error)
         """
         try:
-            # Upload the file to Gemini via File API (needed for PDFs/Images)
             sample_file = genai.upload_file(path=file_path_or_uri, mime_type=mime_type)
             
             prompt = """
             You are a medical document analyzer. Read this document carefully.
-            1. Extract all the raw text from it.
-            2. Determine if this document is a valid medical report, prescription, or lab result.
+            1. Determine if this document is a valid medical report, prescription, or lab result.
+            2. If YES, extract structured health information from it.
             
-            Format your output EXACTLY like this:
-            IS_MEDICAL: [YES or NO]
-            CONFIDENCE: [0.0 to 1.0]
-            TEXT:
-            [insert the raw text here]
+            Format your output EXACTLY as a raw JSON object string (do not use Markdown formatting like ```json).
+            
+            The JSON MUST strictly follow this structure:
+            {
+              "is_medical": true,
+              "Date": "YYYY-MM-DD",
+              "Patient Info": {
+                "age": null,
+                "weight": null, // integer number in kg only (convert lbs to kg -> 1 lb = 0.45 kg)
+                "height": null  // number in ft only (convert cm to ft -> 1 cm = 0.0328 ft)
+              },
+              "Medications": [
+                { "name": "", "dosage": "" }
+              ],
+              "Lab Results": {
+                "Hemoglobin": null,
+                "WBC": null,
+                "RBC": null,
+                "Platelets": null,
+                "Vitamin D": null,
+                "Vitamin B12": null
+              },
+              "recommendations": "Provide a precise, easy-to-understand summary of THIS specific record in at most 1 to 2 lines. DO NOT include any personal information like 'this patient', age, or demographics, as all records belong to the same person.",
+              "confidence_score": 0.0
+            }
+
+            If the document is NOT a valid medical report, just return:
+            {
+              "is_medical": false,
+              "confidence_score": 0.0
+            }
             """
             
             response = self.model.generate_content([sample_file, prompt])
             
-            # Temporary cleanup (good practice for Gemini File API)
             try:
                 genai.delete_file(sample_file.name)
             except:
                 pass
 
-            response_text = response.text
-            
-            # Parse output
-            lines = response_text.strip().split('\n')
-            is_medical_str = ""
-            llm_confidence = 0.0
-            raw_text = ""
-            
-            text_started = False
-            for line in lines:
-                if line.startswith("IS_MEDICAL:"):
-                    is_medical_str = line.split(":", 1)[1].strip().upper()
-                elif line.startswith("CONFIDENCE:"):
-                    try:
-                        llm_confidence = float(line.split(":", 1)[1].strip())
-                    except:
-                        llm_confidence = 0.5
-                elif line.startswith("TEXT:"):
-                    text_started = True
-                elif text_started:
-                    raw_text += line + "\n"
-                    
-            # 1. LLM Score
-            llm_score = llm_confidence if is_medical_str == "YES" else 0.0
-            
-            # 2. Keyword Score
-            keyword_score = self._calculate_keyword_score(raw_text)
-            
-            # 3. Final Validation Score = (0.5 * Keyword Score) + (0.5 * LLM Score)
-            validation_score = (0.5 * keyword_score) + (0.5 * llm_score)
-            
-            # Strict check: LLM MUST say YES and combined score must reach threshold.
-            # Using `or` with text-length would accept ANY document — we avoid that.
-            is_valid = is_medical_str == "YES" and validation_score >= 0.25
-            
-            return is_valid, validation_score, raw_text
-
-        except Exception as e:
-            print(f"Gemini Extraction Error: {e}")
-            return False, 0.0, f"Error: {str(e)}"
-
-    def generate_structured_data(self, raw_text: str) -> Tuple[Dict[str, Any], float]:
-        """
-        Step 2: Generate structured JSON data from the validated raw text.
-        Returns: (structured_dict, final_confidence_score)
-        """
-        prompt = """
-        Extract structured health information from the following medical text.
-        Return ONLY a raw JSON object string (do not use Markdown formatting like ```json).
-        
-        The JSON must strictly follow this structure:
-        {
-          "Date": "YYYY-MM-DD",
-          "Patient Info": {
-            "age": null,
-            "weight": null, // Use integer number in kg only (e.g. 70). If in lbs, convert to kg. 
-            "height": null  // Use number in ft only (e.g. 5.75). If in cm, convert to ft.
-          },
-          "Medications": [
-            { "name": "", "dosage": "" }
-          ],
-          "Lab Results": {
-            "Hemoglobin": null,
-            "WBC": null,
-            "RBC": null,
-            "Platelets": null,
-            "Vitamin D": null,
-            "Vitamin B12": null
-          },
-          "recommendations": "string summary",
-          "confidence_score": 0.0
-        }
-        
-        Rules:
-        - If a value is not found, use null or an empty string/array as appropriate.
-        - IMPORTANT: `Lab Results` values MUST be plain numbers only (e.g., 14.5, not "14.5 g/dL").
-        - `Patient Info.weight` MUST be an integer number in KG. If the document has pounds (lb), convert to kg (1 lb = 0.45 kg) and round to the nearest integer.
-        - `Patient Info.height` MUST be a number (float) in FT. If the document has cm, convert to ft (1 cm = 0.0328 ft) and round to 2 decimal places.
-        - `recommendations` MUST BE a generalized summary of the medical report. **DO NOT include any patient names, doctor names, hospital names, personal information (age, DOB etc) or specific identifiers.** Keep it strictly focused on medical findings and general advice. in (1-2 sentences only be precise).
-        - `confidence_score` should reflect your confidence in the extraction (0.0 to 1.0).
-        
-        Text to analyze:
-        """ + raw_text
-
-        try:
-            response = self.model.generate_content(prompt)
             output_text = response.text.strip()
             
-            # Remove markdown JSON wrappers if Gemini accidentally included them
+            # Remove markdown JSON wrappers if present
             if output_text.startswith("```json"):
                 output_text = output_text[7:]
             if output_text.startswith("```"):
@@ -158,13 +96,23 @@ class GeminiService:
                 
             structured_data = json.loads(output_text.strip())
             
-            final_confidence = structured_data.get("confidence_score", 0.5)
+            is_valid = structured_data.get("is_medical", False)
+            final_confidence = float(structured_data.get("confidence_score", 0.0))
             
-            return structured_data, float(final_confidence)
-            
+            # To preserve UI errors based on threshold, we just return the AI's confidence
+            # If the AI says it's medical and confidence >= 0.25, it's valid.
+            validation_score = final_confidence
+            if is_valid and validation_score >= 0.25:
+                # Remove internal flag from data before saving
+                if "is_medical" in structured_data:
+                    del structured_data["is_medical"]
+                return True, validation_score, structured_data, final_confidence, ""
+            else:
+                return False, validation_score, {}, final_confidence, "This document does not appear to be a valid medical record."
+
         except Exception as e:
-            print(f"Structured Data Extraction Error: {e}")
-            return {}, 0.0
+            print(f"Gemini Combined Extraction Error: {e}")
+            return False, 0.0, {}, 0.0, f"Error: {str(e)}"
 
     def generate_global_summary(self, all_structured_data: list) -> str:
         """

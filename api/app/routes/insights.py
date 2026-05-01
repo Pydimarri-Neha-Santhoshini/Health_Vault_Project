@@ -180,28 +180,9 @@ def get_insights():
         user_settings = (user_res.data[0].get('settings') or {}) if user_res.data else {}
         global_summary_data = user_settings.get('global_insights', {})
         
-        # On-demand fallback: if no summary saved yet but we have chart data, generate it now
-        if (not global_summary_data or not global_summary_data.get('summary')) and chart_data:
-            try:
-                from app.services.gemini_service import gemini_service
-                # Collect all structured data
-                all_insights_res = supabase.table('insights').select('structured_data').in_('record_id', record_ids).execute()
-                all_structs = [i['structured_data'] for i in (all_insights_res.data or []) if i.get('structured_data')]
-                if all_structs:
-                    print(f"DEBUG: On-demand global summary generation for {len(all_structs)} records...")
-                    generated = gemini_service.generate_global_summary(all_structs)
-                    if generated:
-                        global_summary_data = {
-                            "summary": generated,
-                            "updated_at": records_data[0].get('date', 'Recently') if records_data else 'Recently'
-                        }
-                        # Persist to DB for next time
-                        settings = dict(user_settings)
-                        settings['global_insights'] = global_summary_data
-                        service_client.table('users').update({"settings": settings}).eq('id', user_id).execute()
-                        print("DEBUG: On-demand global summary saved.")
-            except Exception as on_demand_err:
-                print(f"DEBUG: On-demand summary generation failed: {on_demand_err}")
+        # We deliberately DO NOT generate a new global summary here (on-demand fallback removed).
+        # To avoid quota limit exhaustion and infinite generation loops, 
+        # Global summaries are STRICTLY regenerated only when a file is ADDDED or DELETED via the background thread.
 
         chart_data.sort(key=lambda x: x['date'])
         

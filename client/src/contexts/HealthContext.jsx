@@ -145,13 +145,15 @@ export const HealthProvider = ({ children }) => {
                 // Indicate summary is being regenerated
                 setIsSummaryUpdating(true);
                 
-                // Refresh insights because recommendations and charts require update
+                // Fetch immediately to update charts/recommendations quickly
                 await fetchInsights(true);
                 
-                // Summary regeneration is backgrounded on server, so we might want to 
-                // wait a bit and refresh again or just let the user refresh manually if they want 
-                // the latest summary immediately.
-                setTimeout(() => setIsSummaryUpdating(false), 5000); // UI hint for 5s
+                // Summary regeneration is backgrounded on server, so we wait 5s 
+                // to fetch the newly generated global summary.
+                setTimeout(() => {
+                    fetchInsights(true);
+                    setIsSummaryUpdating(false);
+                }, 5000);
                 
                 return true;
             } else {
@@ -176,6 +178,7 @@ export const HealthProvider = ({ children }) => {
             refreshAll,
             deleteRecord,
             isSummaryUpdating,
+            setIsSummaryUpdating,
             theme,
             toggleTheme
         }}>

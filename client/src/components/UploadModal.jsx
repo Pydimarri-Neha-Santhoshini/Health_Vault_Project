@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-const UploadModal = ({ isOpen, onClose }) => {
+const UploadModal = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState(null);
     const [formData, setFormData] = useState({
         title: '',
@@ -105,7 +105,11 @@ const UploadModal = ({ isOpen, onClose }) => {
 
             // Auto close after 2 seconds on success
             setTimeout(() => {
-                onClose();
+                if (onSuccess) {
+                    onSuccess();
+                } else {
+                    onClose();
+                }
                 setStatus('idle');
                 setFile(null);
             }, 2000);

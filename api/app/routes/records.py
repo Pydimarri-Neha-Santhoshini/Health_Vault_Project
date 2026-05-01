@@ -39,13 +39,13 @@ def upload_record():
         if file.filename.lower().endswith(".png"):
             mime_type = "image/png"
             
-        # 2. Pipeline Step 1: Validation & Extraction
-        is_valid, validation_score, raw_text = gemini_service.extract_and_validate(temp_path, mime_type)
+        # 2. Pipeline Step 1 & 2: Validation, Extraction & Structuring
+        is_valid, validation_score, structured_data, confidence_score, raw_text_or_error = gemini_service.extract_validate_and_structure(temp_path, mime_type)
         
         if not is_valid:
             os.remove(temp_path)
-            if raw_text.startswith("Error:"):
-                err_msg = raw_text
+            if raw_text_or_error.startswith("Error:"):
+                err_msg = raw_text_or_error
             else:
                 pct = round(validation_score * 100)
                 err_msg = (
@@ -58,10 +58,7 @@ def upload_record():
                 "validation_score": validation_score
             }), 400
             
-        # 3. Pipeline Step 2: Structured Data
-        structured_data, confidence_score = gemini_service.generate_structured_data(raw_text)
-        
-        # 4. Storage to Supabase
+        # 3. Storage to Supabase
         # 4. Storage to Supabase
         from supabase import create_client, Client, ClientOptions
         supabase_url = os.getenv("SUPABASE_URL")

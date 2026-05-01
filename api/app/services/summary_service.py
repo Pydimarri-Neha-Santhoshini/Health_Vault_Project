@@ -16,6 +16,10 @@ def update_global_summary_bg(user_id, date=None):
         return
 
     def run_update():
+        # We removed the 60-second delay. Gemini 1.5 Flash allows 15 RPM on the free tier.
+        # A single upload + summary generation takes 2 RPM, so we are well within limits.
+        print(f"DEBUG BG: Starting global summary generation...")
+        
         try:
             supabase_bg = create_client(supabase_url, supabase_service_key)
             
