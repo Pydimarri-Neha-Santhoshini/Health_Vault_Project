@@ -7,3 +7,7 @@ __pycache__/
 
 node_modules/
 build/
+
+# Mobile App builds (Capacitor)
+android/
+ios/
